@@ -1,0 +1,24 @@
+# Ignore unnecessary files for deployment
+venv/
+.venv/
+env/
+*.pyc
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+.git/
+.gitignore
+.env
+.env.*
+*.md
+tests/
+plans/
+scripts/
+data/
+*.log
+
+# Keep these
+!README.md
+!FRONTEND-GUIDE.md
+!QUICKSTART.md

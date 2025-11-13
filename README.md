@@ -21,6 +21,7 @@ CommonForge takes a list of companies and:
 
 ## ✨ Features
 
+- **Web UI:** Interactive Vue.js app for uploading files and viewing results
 - **Multi-Source Data Ingestion:** CSV + async web scraping
 - **AI-Powered Enrichment:** LLM-based analysis using LangChain + GPT-4
 - **Intelligent Scoring:** 0-100 ICP fit score based on 20+ factors
@@ -31,6 +32,7 @@ CommonForge takes a list of companies and:
 
 ## 🛠 Tech Stack
 
+**Backend:**
 - **Language:** Python 3.11+
 - **Web Framework:** FastAPI
 - **Database:** PostgreSQL 14+
@@ -41,6 +43,12 @@ CommonForge takes a list of companies and:
 - **HTML Parsing:** BeautifulSoup4
 - **Data Processing:** Pandas
 - **Testing:** pytest + pytest-asyncio
+
+**Frontend:**
+- **Framework:** Vue 3 (via CDN)
+- **Styling:** Tailwind CSS
+- **Charts:** Chart.js
+- **Architecture:** Single-page app (SPA)
 
 ## 🚀 Quick Start
 
@@ -276,7 +284,65 @@ Returns:
 
 ---
 
-### Option 3: Programmatic Python API
+### Option 3: Use the Web UI
+
+**NEW!** Interactive web application for uploading files and viewing results.
+
+#### Start the Application
+
+```bash
+# Start both backend and frontend
+./scripts/start.sh
+```
+
+Or start manually:
+
+```bash
+# Backend API
+./scripts/run_api.sh
+
+# Then open in browser
+open http://localhost:8000/app/
+```
+
+#### Features
+
+**Upload View:**
+- Drag & drop CSV files
+- Preview data before processing
+- Upload and trigger pipeline
+
+**Processing View:**
+- Real-time progress bar
+- Step-by-step status updates
+- Auto-navigate when complete
+
+**Companies View:**
+- Sortable table (click column headers)
+- Multi-filter: search, country, segment, score
+- Color-coded ICP scores
+- Pagination
+- Click row for full details
+
+**Statistics Dashboard:**
+- Metric cards (total, enriched, avg score)
+- Segment distribution pie chart
+- Country distribution bar chart
+- Top 10 companies by score
+
+#### Quick Demo
+
+1. Go to http://localhost:8000/app/
+2. Click "Upload" tab
+3. Drag & drop `data/companies.csv`
+4. Watch real-time progress
+5. View enriched results!
+
+See [FRONTEND-GUIDE.md](FRONTEND-GUIDE.md) for detailed usage.
+
+---
+
+### Option 4: Programmatic Python API
 
 Use CommonForge components directly in your Python code.
 
@@ -388,7 +454,7 @@ mypy src/
 CommonForge/
 ├── src/                        # Source code
 │   ├── api/                   # FastAPI REST API
-│   │   └── main.py           # API endpoints, middleware
+│   │   └── main.py           # API endpoints, file upload, job tracking
 │   ├── ingestion/            # Data ingestion layer
 │   │   ├── structured.py     # CSV loading & validation
 │   │   └── unstructured.py   # Website scraping
@@ -400,6 +466,8 @@ CommonForge/
 │   ├── models.py             # ORM models
 │   ├── schemas.py            # Pydantic schemas
 │   └── pipeline.py           # Main orchestration
+├── frontend/                  # Web UI (Vue 3 + Tailwind)
+│   └── index.html            # Single-page application
 ├── tests/                     # Test suite (pytest)
 │   ├── test_api.py           # API endpoint tests
 │   ├── test_ingestion.py     # CSV & scraping tests
@@ -407,19 +475,20 @@ CommonForge/
 │   ├── test_pipeline_e2e.py  # End-to-end tests
 │   └── test_full_ingestion.py
 ├── scripts/                   # Helper scripts
+│   ├── start.sh              # Start frontend + backend
 │   ├── run_pipeline.sh       # Pipeline runner
 │   ├── run_api.sh            # API server starter
 │   └── init_db.sh            # Database initialization
 ├── data/                      # Sample data
 │   └── companies.csv         # 5 sample companies
-├── plan/                      # Implementation plans
-│   ├── 00-master-plan.md
-│   ├── 01-architecture.md
+├── plans/                     # Implementation plans
+│   ├── frontend-vue-tailwind.md
 │   └── ...                   # Detailed phase plans
 ├── .env.example              # Environment template
 ├── requirements.txt          # Python dependencies
 ├── pytest.ini                # Test configuration
 ├── PROJECT-PROGRESS.md       # Development progress
+├── FRONTEND-GUIDE.md         # Frontend usage guide
 └── README.md                 # This file
 ```
 
@@ -612,26 +681,32 @@ Principal AI Engineer Candidate
 
 After setup, try these:
 
-1. **Run sample pipeline:**
+1. **Start the Web UI (Recommended):**
+   ```bash
+   ./scripts/start.sh
+   # Open http://localhost:8000/app/
+   ```
+
+2. **Or run CLI pipeline:**
    ```bash
    ./scripts/run_pipeline.sh data/companies.csv --max-companies 2
    ```
 
-2. **Start API and explore:**
+3. **Or use the REST API:**
    ```bash
    ./scripts/run_api.sh
    # Open http://localhost:8000/docs
    ```
 
-3. **Query enriched data:**
+4. **Query enriched data:**
    ```bash
    curl "http://localhost:8000/companies?segment=Enterprise"
    ```
 
-4. **Process your own data:**
+5. **Process your own data:**
    - Create CSV with required columns
-   - Run pipeline with your file
-   - Query via API
+   - Upload via web UI or run pipeline
+   - View results in web UI or query via API
 
 **Questions?** Check the documentation files or review the test suite for examples.
 

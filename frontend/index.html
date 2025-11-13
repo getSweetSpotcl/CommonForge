@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CommonForge - AI-Powered Lead Scoring</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        [v-cloak] { display: none; }
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity 0.3s;
+        }
+        .fade-enter-from, .fade-leave-to {
+            opacity: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app" v-cloak>
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">CommonForge</h1>
+                        <p class="text-sm text-gray-600">AI-Powered B2B Lead Scoring</p>
+                    </div>
+                    <nav class="flex space-x-4">
+                        <button @click="currentView = 'upload'"
+                                :class="currentView === 'upload' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'"
+                                class="px-4 py-2 rounded-lg font-medium transition-colors">
+                            Upload
+                        </button>
+                        <button @click="currentView = 'companies'; fetchCompanies()"
+                                :class="currentView === 'companies' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'"
+                                class="px-4 py-2 rounded-lg font-medium transition-colors">
+                            Companies
+                        </button>
+                        <button @click="currentView = 'stats'; fetchStats()"
+                                :class="currentView === 'stats' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'"
+                                class="px-4 py-2 rounded-lg font-medium transition-colors">
+                            Statistics
+                        </button>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Upload View -->
+            <div v-if="currentView === 'upload'" class="space-y-6">
+                <div class="bg-white rounded-lg shadow-md p-8">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6">Upload Company Data</h2>
+
+                    <!-- Drop Zone -->
+                    <div @click="$refs.fileInput.click()"
+                         @dragover.prevent="dragOver = true"
+                         @dragleave.prevent="dragOver = false"
+                         @drop.prevent="handleDrop"
+                         :class="dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300'"
+                         class="border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        <p class="mt-4 text-lg text-gray-600">
+                            <span class="font-semibold">Click to upload</span> or drag and drop
+                        </p>
+                        <p class="mt-2 text-sm text-gray-500">CSV files only</p>
+                        <input ref="fileInput" type="file" accept=".csv" @change="handleFileSelect" class="hidden">
+                    </div>
+
+                    <!-- Preview -->
+                    <div v-if="previewData.length > 0" class="mt-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Preview (first 5 rows)</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th v-for="(header, idx) in previewHeaders" :key="idx"
+                                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            {{ header }}
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <tr v-for="(row, idx) in previewData" :key="idx">
+                                        <td v-for="(cell, cellIdx) in row" :key="cellIdx"
+                                            class="px-4 py-3 text-sm text-gray-900">
+                                            {{ cell }}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-6 flex justify-end space-x-4">
+                            <button @click="selectedFile = null; previewData = []"
+                                    class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button @click="uploadFile"
+                                    :disabled="uploading"
+                                    class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                                {{ uploading ? 'Uploading...' : 'Process Companies' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Processing View -->
+            <div v-if="currentView === 'processing'" class="space-y-6">
+                <div class="bg-white rounded-lg shadow-md p-8">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6">Processing...</h2>
+
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-sm text-gray-600 mb-2">
+                                <span>{{ jobProgress.step }}</span>
+                                <span>{{ jobProgress.current }}%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-3">
+                                <div :style="{width: jobProgress.current + '%'}"
+                                     class="bg-blue-500 h-3 rounded-full transition-all duration-500"></div>
+                            </div>
+                        </div>
+
+                        <p class="text-gray-700">{{ jobProgress.message }}</p>
+
+                        <div class="flex items-center text-sm text-gray-500">
+                            <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Processing your data...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Companies View -->
+            <div v-if="currentView === 'companies'" class="space-y-6">
+                <!-- Filters -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <input v-model="filters.search" @input="applyFilters"
+                               type="text" placeholder="Search companies..."
+                               class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+
+                        <select v-model="filters.country" @change="applyFilters"
+                                class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">All Countries</option>
+                            <option v-for="country in uniqueCountries" :key="country" :value="country">
+                                {{ country }}
+                            </option>
+                        </select>
+
+                        <select v-model="filters.segment" @change="applyFilters"
+                                class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">All Segments</option>
+                            <option value="SMB">SMB</option>
+                            <option value="Mid-Market">Mid-Market</option>
+                            <option value="Enterprise">Enterprise</option>
+                        </select>
+
+                        <div>
+                            <label class="block text-sm text-gray-600 mb-1">Min Score: {{ filters.minScore }}</label>
+                            <input v-model.number="filters.minScore" @input="applyFilters"
+                                   type="range" min="0" max="100" step="5"
+                                   class="w-full">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Companies Table -->
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div v-if="loading" class="p-8 text-center">
+                        <svg class="animate-spin h-8 w-8 mx-auto text-blue-500" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="mt-4 text-gray-600">Loading companies...</p>
+                    </div>
+
+                    <div v-else-if="filteredCompanies.length === 0" class="p-8 text-center text-gray-500">
+                        No companies found. Try adjusting your filters or upload a CSV file.
+                    </div>
+
+                    <div v-else class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th @click="sortBy('company_name')"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        Company {{ sortField === 'company_name' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}
+                                    </th>
+                                    <th @click="sortBy('country')"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        Country {{ sortField === 'country' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}
+                                    </th>
+                                    <th @click="sortBy('employee_count')"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        Employees {{ sortField === 'employee_count' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}
+                                    </th>
+                                    <th @click="sortBy('icp_fit_score')"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        ICP Score {{ sortField === 'icp_fit_score' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}
+                                    </th>
+                                    <th @click="sortBy('segment')"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                        Segment {{ sortField === 'segment' ? (sortOrder === 'asc' ? '↑' : '↓') : '' }}
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr v-for="company in paginatedCompanies" :key="company.id"
+                                    class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-medium text-gray-900">{{ company.company_name }}</div>
+                                        <div class="text-sm text-gray-500">{{ company.domain }}</div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {{ company.country }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        {{ company.employee_count?.toLocaleString() }}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span v-if="company.icp_fit_score"
+                                              :class="getScoreColor(company.icp_fit_score)"
+                                              class="px-3 py-1 rounded-full text-sm font-semibold">
+                                            {{ company.icp_fit_score }}
+                                        </span>
+                                        <span v-else class="text-gray-400 text-sm">N/A</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span v-if="company.segment"
+                                              class="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+                                            {{ company.segment }}
+                                        </span>
+                                        <span v-else class="text-gray-400 text-sm">N/A</span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                        <button @click="showCompanyDetail(company)"
+                                                class="text-blue-600 hover:text-blue-900 font-medium">
+                                            View Details
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div v-if="filteredCompanies.length > 0" class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div class="text-sm text-gray-700">
+                                Showing {{ ((currentPage - 1) * perPage) + 1 }} to {{ Math.min(currentPage * perPage, filteredCompanies.length) }} of {{ filteredCompanies.length }} companies
+                            </div>
+                            <div class="flex space-x-2">
+                                <button @click="currentPage--"
+                                        :disabled="currentPage === 1"
+                                        class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Previous
+                                </button>
+                                <button @click="currentPage++"
+                                        :disabled="currentPage >= totalPages"
+                                        class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics View -->
+            <div v-if="currentView === 'stats'" class="space-y-6">
+                <!-- Metric Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <div class="text-sm font-medium text-gray-500">Total Companies</div>
+                        <div class="mt-2 text-3xl font-bold text-gray-900">{{ stats.total_companies || 0 }}</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <div class="text-sm font-medium text-gray-500">Enriched Companies</div>
+                        <div class="mt-2 text-3xl font-bold text-green-600">{{ stats.enriched_companies || 0 }}</div>
+                        <div class="mt-1 text-sm text-gray-500">{{ stats.enrichment_rate || '0%' }}</div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <div class="text-sm font-medium text-gray-500">Average ICP Score</div>
+                        <div class="mt-2 text-3xl font-bold text-blue-600">{{ stats.average_icp_score || 'N/A' }}</div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Companies by Segment</h3>
+                        <canvas ref="segmentChart"></canvas>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Companies by Country</h3>
+                        <canvas ref="countryChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Top Companies -->
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Top 10 Companies by Score</h3>
+                    <div class="space-y-3">
+                        <div v-for="(company, idx) in stats.top_companies" :key="company.id"
+                             class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                            <div class="flex items-center space-x-4">
+                                <span class="text-2xl font-bold text-gray-400">{{ idx + 1 }}</span>
+                                <div>
+                                    <div class="font-medium text-gray-900">{{ company.company_name }}</div>
+                                    <div class="text-sm text-gray-500">{{ company.domain }}</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <span class="px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+                                    {{ company.segment }}
+                                </span>
+                                <span :class="getScoreColor(company.icp_fit_score)"
+                                      class="px-4 py-2 rounded-full text-sm font-bold">
+                                    {{ company.icp_fit_score }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Company Detail Modal -->
+        <div v-if="selectedCompany" @click="selectedCompany = null"
+             class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div @click.stop class="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-900">{{ selectedCompany.company_name }}</h2>
+                            <p class="text-gray-600">{{ selectedCompany.domain }}</p>
+                        </div>
+                        <button @click="selectedCompany = null"
+                                class="text-gray-400 hover:text-gray-600">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <div class="text-sm font-medium text-gray-500">Country</div>
+                            <div class="mt-1 text-lg text-gray-900">{{ selectedCompany.country }}</div>
+                        </div>
+                        <div>
+                            <div class="text-sm font-medium text-gray-500">Employees</div>
+                            <div class="mt-1 text-lg text-gray-900">{{ selectedCompany.employee_count?.toLocaleString() }}</div>
+                        </div>
+                        <div>
+                            <div class="text-sm font-medium text-gray-500">Industry</div>
+                            <div class="mt-1 text-lg text-gray-900">{{ selectedCompany.industry_raw }}</div>
+                        </div>
+                        <div>
+                            <div class="text-sm font-medium text-gray-500">Segment</div>
+                            <div class="mt-1">
+                                <span v-if="selectedCompany.segment"
+                                      class="px-3 py-1 rounded-full text-sm font-semibold bg-purple-100 text-purple-800">
+                                    {{ selectedCompany.segment }}
+                                </span>
+                                <span v-else class="text-gray-400">N/A</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <div class="text-sm font-medium text-gray-500 mb-2">ICP Fit Score</div>
+                        <div class="flex items-center space-x-4">
+                            <span v-if="selectedCompany.icp_fit_score"
+                                  :class="getScoreColor(selectedCompany.icp_fit_score)"
+                                  class="px-4 py-2 rounded-full text-2xl font-bold">
+                                {{ selectedCompany.icp_fit_score }}/100
+                            </span>
+                            <span v-else class="text-gray-400">Not enriched yet</span>
+                        </div>
+                    </div>
+
+                    <div v-if="selectedCompany.primary_use_case" class="mb-6">
+                        <div class="text-sm font-medium text-gray-500 mb-2">Primary Use Case</div>
+                        <div class="text-gray-900">{{ selectedCompany.primary_use_case }}</div>
+                    </div>
+
+                    <div v-if="selectedCompany.personalized_pitch" class="mb-6">
+                        <div class="text-sm font-medium text-gray-500 mb-2">Personalized Pitch</div>
+                        <div class="p-4 bg-blue-50 rounded-lg text-gray-900">{{ selectedCompany.personalized_pitch }}</div>
+                    </div>
+
+                    <div v-if="selectedCompany.risk_flags && selectedCompany.risk_flags.length > 0" class="mb-6">
+                        <div class="text-sm font-medium text-gray-500 mb-2">Risk Flags</div>
+                        <div class="flex flex-wrap gap-2">
+                            <span v-for="flag in selectedCompany.risk_flags" :key="flag"
+                                  class="px-3 py-1 rounded-full text-sm font-semibold bg-red-100 text-red-800">
+                                {{ flag }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div v-if="selectedCompany.website_text_snippet" class="mb-6">
+                        <div class="text-sm font-medium text-gray-500 mb-2">Website Snippet</div>
+                        <div class="p-4 bg-gray-50 rounded-lg text-sm text-gray-700 max-h-40 overflow-y-auto">
+                            {{ selectedCompany.website_text_snippet.substring(0, 500) }}...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    // Navigation
+                    currentView: 'upload', // upload, processing, companies, stats
+
+                    // Upload
+                    selectedFile: null,
+                    previewHeaders: [],
+                    previewData: [],
+                    dragOver: false,
+                    uploading: false,
+
+                    // Processing
+                    currentJobId: null,
+                    jobProgress: {
+                        step: 'Initializing',
+                        current: 0,
+                        total: 100,
+                        message: 'Starting...'
+                    },
+                    pollInterval: null,
+
+                    // Companies
+                    companies: [],
+                    filteredCompanies: [],
+                    filters: {
+                        search: '',
+                        country: '',
+                        segment: '',
+                        minScore: 0
+                    },
+                    sortField: 'icp_fit_score',
+                    sortOrder: 'desc',
+                    currentPage: 1,
+                    perPage: 25,
+
+                    // Stats
+                    stats: {},
+
+                    // UI State
+                    loading: false,
+                    selectedCompany: null,
+
+                    // API Base URL
+                    apiBase: 'http://localhost:8000'
+                };
+            },
+
+            computed: {
+                uniqueCountries() {
+                    return [...new Set(this.companies.map(c => c.country))].sort();
+                },
+
+                paginatedCompanies() {
+                    const start = (this.currentPage - 1) * this.perPage;
+                    const end = start + this.perPage;
+                    return this.filteredCompanies.slice(start, end);
+                },
+
+                totalPages() {
+                    return Math.ceil(this.filteredCompanies.length / this.perPage);
+                }
+            },
+
+            methods: {
+                // File Upload
+                handleFileSelect(event) {
+                    const file = event.target.files[0];
+                    if (file) this.processFile(file);
+                },
+
+                handleDrop(event) {
+                    this.dragOver = false;
+                    const file = event.dataTransfer.files[0];
+                    if (file) this.processFile(file);
+                },
+
+                async processFile(file) {
+                    if (!file.name.endsWith('.csv')) {
+                        alert('Please upload a CSV file');
+                        return;
+                    }
+
+                    this.selectedFile = file;
+
+                    // Read and preview file
+                    const text = await file.text();
+                    const lines = text.trim().split('\n').slice(0, 6);
+                    this.previewHeaders = lines[0].split(',');
+                    this.previewData = lines.slice(1).map(line => line.split(','));
+                },
+
+                async uploadFile() {
+                    if (!this.selectedFile) return;
+
+                    this.uploading = true;
+                    const formData = new FormData();
+                    formData.append('file', this.selectedFile);
+
+                    try {
+                        const response = await fetch(`${this.apiBase}/api/upload`, {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.currentJobId = data.job_id;
+                            this.currentView = 'processing';
+                            this.startPolling();
+                        } else {
+                            alert('Upload failed: ' + data.detail);
+                        }
+                    } catch (error) {
+                        alert('Upload failed: ' + error.message);
+                    } finally {
+                        this.uploading = false;
+                        this.selectedFile = null;
+                        this.previewData = [];
+                    }
+                },
+
+                // Job Polling
+                startPolling() {
+                    this.pollInterval = setInterval(() => {
+                        this.checkJobStatus();
+                    }, 2000);
+                },
+
+                async checkJobStatus() {
+                    try {
+                        const response = await fetch(`${this.apiBase}/api/jobs/${this.currentJobId}`);
+                        const job = await response.json();
+
+                        this.jobProgress = job.progress;
+
+                        if (job.status === 'completed') {
+                            clearInterval(this.pollInterval);
+                            setTimeout(() => {
+                                this.currentView = 'companies';
+                                this.fetchCompanies();
+                            }, 2000);
+                        } else if (job.status === 'failed') {
+                            clearInterval(this.pollInterval);
+                            alert('Processing failed: ' + job.error);
+                            this.currentView = 'upload';
+                        }
+                    } catch (error) {
+                        console.error('Failed to check job status:', error);
+                    }
+                },
+
+                // Companies
+                async fetchCompanies() {
+                    this.loading = true;
+                    try {
+                        const response = await fetch(`${this.apiBase}/companies?limit=1000`);
+                        const data = await response.json();
+                        this.companies = data.companies;
+                        this.applyFilters();
+                    } catch (error) {
+                        console.error('Failed to fetch companies:', error);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                applyFilters() {
+                    let filtered = this.companies;
+
+                    // Search filter
+                    if (this.filters.search) {
+                        const search = this.filters.search.toLowerCase();
+                        filtered = filtered.filter(c =>
+                            c.company_name.toLowerCase().includes(search) ||
+                            c.domain.toLowerCase().includes(search)
+                        );
+                    }
+
+                    // Country filter
+                    if (this.filters.country) {
+                        filtered = filtered.filter(c => c.country === this.filters.country);
+                    }
+
+                    // Segment filter
+                    if (this.filters.segment) {
+                        filtered = filtered.filter(c => c.segment === this.filters.segment);
+                    }
+
+                    // Score filter
+                    if (this.filters.minScore > 0) {
+                        filtered = filtered.filter(c => c.icp_fit_score >= this.filters.minScore);
+                    }
+
+                    // Apply sorting
+                    filtered.sort((a, b) => {
+                        const aVal = a[this.sortField];
+                        const bVal = b[this.sortField];
+
+                        if (aVal === null || aVal === undefined) return 1;
+                        if (bVal === null || bVal === undefined) return -1;
+
+                        if (this.sortOrder === 'asc') {
+                            return aVal > bVal ? 1 : -1;
+                        } else {
+                            return aVal < bVal ? 1 : -1;
+                        }
+                    });
+
+                    this.filteredCompanies = filtered;
+                    this.currentPage = 1;
+                },
+
+                sortBy(field) {
+                    if (this.sortField === field) {
+                        this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.sortField = field;
+                        this.sortOrder = 'desc';
+                    }
+                    this.applyFilters();
+                },
+
+                showCompanyDetail(company) {
+                    this.selectedCompany = company;
+                },
+
+                getScoreColor(score) {
+                    if (score >= 80) return 'bg-green-100 text-green-800';
+                    if (score >= 50) return 'bg-yellow-100 text-yellow-800';
+                    return 'bg-red-100 text-red-800';
+                },
+
+                // Statistics
+                async fetchStats() {
+                    try {
+                        const response = await fetch(`${this.apiBase}/stats`);
+                        this.stats = await response.json();
+
+                        // Render charts on next tick
+                        this.$nextTick(() => {
+                            this.renderCharts();
+                        });
+                    } catch (error) {
+                        console.error('Failed to fetch stats:', error);
+                    }
+                },
+
+                renderCharts() {
+                    // Segment Chart
+                    const segmentCtx = this.$refs.segmentChart;
+                    if (segmentCtx && this.stats.by_segment) {
+                        new Chart(segmentCtx, {
+                            type: 'pie',
+                            data: {
+                                labels: Object.keys(this.stats.by_segment),
+                                datasets: [{
+                                    data: Object.values(this.stats.by_segment),
+                                    backgroundColor: [
+                                        '#3B82F6', // blue
+                                        '#10B981', // green
+                                        '#F59E0B', // yellow
+                                    ]
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: {
+                                        position: 'bottom'
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // Country Chart
+                    const countryCtx = this.$refs.countryChart;
+                    if (countryCtx && this.stats.by_country) {
+                        new Chart(countryCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: Object.keys(this.stats.by_country),
+                                datasets: [{
+                                    label: 'Companies',
+                                    data: Object.values(this.stats.by_country),
+                                    backgroundColor: '#3B82F6'
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: {
+                                        display: false
+                                    }
+                                },
+                                scales: {
+                                    y: {
+                                        beginAtZero: true,
+                                        ticks: {
+                                            stepSize: 1
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            },
+
+            mounted() {
+                // Fetch companies on mount if we have data
+                this.fetchCompanies();
+            },
+
+            beforeUnmount() {
+                // Clean up polling interval
+                if (this.pollInterval) {
+                    clearInterval(this.pollInterval);
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

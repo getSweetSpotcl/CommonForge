@@ -4,14 +4,20 @@ FastAPI REST API for CommonForge lead scoring system.
 Provides endpoints to query enriched company data.
 """
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
-from typing import List, Optional
+from typing import List, Optional, Dict
 import logging
 import time
+import uuid
+import tempfile
+import os
+from pathlib import Path
+import asyncio
 
 from src.db import get_db, check_connection, engine
 from src.models import Company
@@ -21,6 +27,10 @@ from src.config import settings
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Job tracking (in-memory store)
+# For production, use Redis
+jobs: Dict[str, Dict] = {}
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -61,6 +71,9 @@ async def log_requests(request, call_next):
 
     return response
 
+
+# Mount static files for frontend (must be after API routes)
+# Will be mounted at the end of file
 
 # Root endpoint
 @app.get("/", tags=["Health"])
@@ -226,6 +239,95 @@ async def get_company_by_domain(domain: str, db: Session = Depends(get_db)):
     return CompanyEnriched.model_validate(company)
 
 
+# Upload CSV and trigger pipeline
+@app.post("/api/upload", tags=["Pipeline"])
+async def upload_csv(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+):
+    """
+    Upload CSV file and trigger pipeline processing.
+
+    **Parameters:**
+    - `file`: CSV file with company data
+
+    **Returns:**
+    - `job_id`: Unique job identifier for tracking progress
+    - `status`: Initial job status
+    - `message`: Status message
+    """
+    try:
+        # Validate file type
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="File must be a CSV")
+
+        # Generate unique job ID
+        job_id = str(uuid.uuid4())
+
+        # Create temporary file
+        temp_dir = tempfile.gettempdir()
+        temp_file_path = os.path.join(temp_dir, f"{job_id}.csv")
+
+        # Save uploaded file
+        with open(temp_file_path, 'wb') as f:
+            content = await file.read()
+            f.write(content)
+
+        # Initialize job tracking
+        jobs[job_id] = {
+            "job_id": job_id,
+            "status": "queued",
+            "progress": {
+                "step": "Initializing",
+                "current": 0,
+                "total": 100,
+                "message": "Pipeline queued"
+            },
+            "result": None,
+            "error": None,
+            "filename": file.filename
+        }
+
+        # Start pipeline in background
+        background_tasks.add_task(run_pipeline_task, job_id, temp_file_path)
+
+        logger.info(f"Upload successful - Job ID: {job_id}, File: {file.filename}")
+
+        return {
+            "job_id": job_id,
+            "status": "queued",
+            "message": f"File '{file.filename}' uploaded successfully. Processing started."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+# Get job status
+@app.get("/api/jobs/{job_id}", tags=["Pipeline"])
+async def get_job_status(job_id: str):
+    """
+    Get status of a pipeline job.
+
+    **Parameters:**
+    - `job_id`: Job identifier from upload response
+
+    **Returns:**
+    - `job_id`: Job identifier
+    - `status`: Current status (queued, processing, completed, failed)
+    - `progress`: Progress information
+    - `result`: Results (when completed)
+    - `error`: Error message (if failed)
+    """
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    return jobs[job_id]
+
+
 # Statistics endpoint
 @app.get("/stats", tags=["Statistics"])
 async def get_statistics(db: Session = Depends(get_db)):
@@ -339,6 +441,95 @@ async def shutdown_event():
     """Log shutdown information"""
     logger.info("CommonForge API shutting down...")
     engine.dispose()
+
+
+# Background task to run pipeline
+async def run_pipeline_task(job_id: str, csv_path: str):
+    """
+    Run pipeline as background task with progress tracking.
+
+    Args:
+        job_id: Job identifier
+        csv_path: Path to CSV file
+    """
+    from src.pipeline import Pipeline
+
+    try:
+        # Update status to processing
+        jobs[job_id]["status"] = "processing"
+        jobs[job_id]["progress"]["message"] = "Starting pipeline..."
+
+        def progress_callback(step: str, current: int, total: int, message: str):
+            """Callback to update job progress"""
+            jobs[job_id]["progress"] = {
+                "step": step,
+                "current": current,
+                "total": total,
+                "message": message
+            }
+
+        # Create pipeline with progress callback
+        pipeline = Pipeline(
+            csv_path=csv_path,
+            dry_run=False,
+            skip_scraping=False,
+            skip_enrichment=False,
+            max_companies=None
+        )
+
+        # Add progress tracking manually for each step
+        jobs[job_id]["progress"] = {
+            "step": "Loading CSV",
+            "current": 10,
+            "total": 100,
+            "message": "Loading company data..."
+        }
+
+        # Run pipeline
+        success = await pipeline.run()
+
+        if success:
+            jobs[job_id]["status"] = "completed"
+            jobs[job_id]["progress"] = {
+                "step": "Completed",
+                "current": 100,
+                "total": 100,
+                "message": "Pipeline completed successfully"
+            }
+            jobs[job_id]["result"] = {
+                "companies_processed": pipeline.stats["csv_loaded"],
+                "websites_scraped": pipeline.stats["websites_scraped"],
+                "scraping_successful": pipeline.stats["scraping_successful"],
+                "companies_enriched": pipeline.stats["companies_enriched"],
+                "enrichment_successful": pipeline.stats["enrichment_successful"],
+                "companies_persisted": pipeline.stats["companies_persisted"]
+            }
+            logger.info(f"Job {job_id} completed successfully")
+        else:
+            raise Exception("Pipeline returned failure status")
+
+    except Exception as e:
+        logger.error(f"Job {job_id} failed: {e}")
+        jobs[job_id]["status"] = "failed"
+        jobs[job_id]["error"] = str(e)
+        jobs[job_id]["progress"]["message"] = f"Error: {str(e)}"
+
+    finally:
+        # Clean up temporary file
+        try:
+            if os.path.exists(csv_path):
+                os.remove(csv_path)
+        except Exception as e:
+            logger.warning(f"Failed to remove temp file {csv_path}: {e}")
+
+
+# Mount static files for frontend (must be last to not interfere with API routes)
+frontend_path = Path(__file__).parent.parent.parent / "frontend"
+if frontend_path.exists():
+    app.mount("/app", StaticFiles(directory=str(frontend_path), html=True), name="frontend")
+    logger.info(f"Frontend mounted at /app from {frontend_path}")
+else:
+    logger.warning(f"Frontend directory not found at {frontend_path}")
 
 
 if __name__ == "__main__":
