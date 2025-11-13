@@ -15,13 +15,7 @@ logger = logging.getLogger(__name__)
 class CSVIngestor:
     """Handles CSV file ingestion and validation"""
 
-    REQUIRED_COLUMNS = [
-        'company_name',
-        'domain',
-        'country',
-        'employee_count',
-        'industry_raw'
-    ]
+    REQUIRED_COLUMNS = ["company_name", "domain", "country", "employee_count", "industry_raw"]
 
     def __init__(self, csv_path: Path):
         """
@@ -35,7 +29,7 @@ class CSVIngestor:
         if not self.csv_path.exists():
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
 
-        if not self.csv_path.suffix.lower() == '.csv':
+        if not self.csv_path.suffix.lower() == ".csv":
             raise ValueError(f"File must be a CSV: {csv_path}")
 
     def load(self) -> pd.DataFrame:
@@ -99,28 +93,25 @@ class CSVIngestor:
         df = df.dropna(subset=self.REQUIRED_COLUMNS)
 
         # Normalize domain
-        df['domain'] = df['domain'].apply(self._normalize_domain)
+        df["domain"] = df["domain"].apply(self._normalize_domain)
 
         # Clean company name
-        df['company_name'] = df['company_name'].str.strip()
+        df["company_name"] = df["company_name"].str.strip()
 
         # Clean country
-        df['country'] = df['country'].str.strip()
+        df["country"] = df["country"].str.strip()
 
         # Ensure employee_count is integer
-        df['employee_count'] = pd.to_numeric(
-            df['employee_count'],
-            errors='coerce'
-        )
-        df = df.dropna(subset=['employee_count'])
-        df['employee_count'] = df['employee_count'].astype(int)
+        df["employee_count"] = pd.to_numeric(df["employee_count"], errors="coerce")
+        df = df.dropna(subset=["employee_count"])
+        df["employee_count"] = df["employee_count"].astype(int)
 
         # Remove duplicates by domain (keep first occurrence)
-        df = df.drop_duplicates(subset=['domain'], keep='first')
+        df = df.drop_duplicates(subset=["domain"], keep="first")
 
         # Remove invalid entries
-        df = df[df['employee_count'] > 0]
-        df = df[df['domain'].str.len() > 0]
+        df = df[df["employee_count"] > 0]
+        df = df[df["domain"].str.len() > 0]
 
         return df
 
@@ -146,19 +137,19 @@ class CSVIngestor:
         domain = str(domain).strip().lower()
 
         # Remove protocol
-        domain = domain.replace('http://', '').replace('https://', '')
+        domain = domain.replace("http://", "").replace("https://", "")
 
         # Remove www
-        domain = domain.replace('www.', '')
+        domain = domain.replace("www.", "")
 
         # Remove trailing slash
-        domain = domain.rstrip('/')
+        domain = domain.rstrip("/")
 
         # Remove path (keep only domain)
-        domain = domain.split('/')[0]
+        domain = domain.split("/")[0]
 
         # Remove port if present
-        domain = domain.split(':')[0]
+        domain = domain.split(":")[0]
 
         return domain
 
@@ -172,7 +163,7 @@ class CSVIngestor:
         Returns:
             List[Dict]: List of company records
         """
-        return df.to_dict('records')
+        return df.to_dict("records")
 
 
 def load_companies_from_csv(csv_path: Path) -> List[Dict]:

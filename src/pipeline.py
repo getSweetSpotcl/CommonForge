@@ -22,14 +22,13 @@ from src.ingestion.unstructured import scrape_companies
 from src.processing.cleaning import (
     merge_structured_unstructured,
     prepare_for_enrichment,
-    apply_enrichment_result
+    apply_enrichment_result,
 )
 from src.processing.llm_chain import enrich_companies
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ class Pipeline:
         dry_run: bool = False,
         skip_scraping: bool = False,
         skip_enrichment: bool = False,
-        max_companies: Optional[int] = None
+        max_companies: Optional[int] = None,
     ):
         """
         Initialize pipeline.
@@ -69,13 +68,13 @@ class Pipeline:
 
         # Statistics
         self.stats = {
-            'csv_loaded': 0,
-            'websites_scraped': 0,
-            'scraping_successful': 0,
-            'companies_enriched': 0,
-            'enrichment_successful': 0,
-            'companies_persisted': 0,
-            'errors': []
+            "csv_loaded": 0,
+            "websites_scraped": 0,
+            "scraping_successful": 0,
+            "companies_enriched": 0,
+            "enrichment_successful": 0,
+            "companies_persisted": 0,
+            "errors": [],
         }
 
     async def run(self) -> bool:
@@ -139,7 +138,7 @@ class Pipeline:
 
         except Exception as e:
             logger.error(f"Pipeline failed with error: {e}", exc_info=True)
-            self.stats['errors'].append(str(e))
+            self.stats["errors"].append(str(e))
             return False
 
     def _load_csv(self) -> bool:
@@ -150,16 +149,18 @@ class Pipeline:
 
         try:
             if not self.csv_path.exists():
-                logger.error(f"CSV file not found: {self.csv_path}")
+                error_msg = f"CSV file not found: {self.csv_path}"
+                logger.error(error_msg)
+                self.stats["errors"].append(f"CSV loading: {error_msg}")
                 return False
 
             self.structured_data = load_companies_from_csv(self.csv_path)
 
             # Apply max_companies limit if specified
             if self.max_companies:
-                self.structured_data = self.structured_data[:self.max_companies]
+                self.structured_data = self.structured_data[: self.max_companies]
 
-            self.stats['csv_loaded'] = len(self.structured_data)
+            self.stats["csv_loaded"] = len(self.structured_data)
 
             logger.info(f"✓ Loaded {len(self.structured_data)} companies from CSV")
 
@@ -172,7 +173,7 @@ class Pipeline:
 
         except Exception as e:
             logger.error(f"Failed to load CSV: {e}")
-            self.stats['errors'].append(f"CSV loading: {e}")
+            self.stats["errors"].append(f"CSV loading: {e}")
             return False
 
     async def _scrape_websites(self) -> bool:
@@ -182,17 +183,21 @@ class Pipeline:
         logger.info("-" * 70)
 
         try:
-            domains = [company['domain'] for company in self.structured_data]
+            domains = [company["domain"] for company in self.structured_data]
             logger.info(f"Scraping {len(domains)} websites...")
 
             self.scraped_data = await scrape_companies(domains)
 
-            self.stats['websites_scraped'] = len(self.scraped_data)
-            self.stats['scraping_successful'] = sum(
-                1 for s in self.scraped_data if s['status'] == 'success'
+            self.stats["websites_scraped"] = len(self.scraped_data)
+            self.stats["scraping_successful"] = sum(
+                1 for s in self.scraped_data if s["status"] == "success"
             )
 
-            success_rate = (self.stats['scraping_successful'] / len(self.scraped_data) * 100) if self.scraped_data else 0
+            success_rate = (
+                (self.stats["scraping_successful"] / len(self.scraped_data) * 100)
+                if self.scraped_data
+                else 0
+            )
 
             logger.info(
                 f"✓ Scraped {self.stats['websites_scraped']} websites - "
@@ -203,7 +208,7 @@ class Pipeline:
 
         except Exception as e:
             logger.error(f"Failed to scrape websites: {e}")
-            self.stats['errors'].append(f"Website scraping: {e}")
+            self.stats["errors"].append(f"Website scraping: {e}")
             return False
 
     def _merge_data(self) -> bool:
@@ -214,8 +219,7 @@ class Pipeline:
 
         try:
             self.merged_data = merge_structured_unstructured(
-                self.structured_data,
-                self.scraped_data
+                self.structured_data, self.scraped_data
             )
 
             logger.info(f"✓ Merged {len(self.merged_data)} company records")
@@ -224,7 +228,7 @@ class Pipeline:
 
         except Exception as e:
             logger.error(f"Failed to merge data: {e}")
-            self.stats['errors'].append(f"Data merging: {e}")
+            self.stats["errors"].append(f"Data merging: {e}")
             return False
 
     async def _enrich_companies(self) -> bool:
@@ -246,41 +250,48 @@ class Pipeline:
             # Enrich companies
             enrichment_results = await enrich_companies(enrichable)
 
-            self.stats['companies_enriched'] = len(enrichable)
-            self.stats['enrichment_successful'] = sum(
-                1 for r in enrichment_results if r.get('icp_fit_score') is not None
+            self.stats["companies_enriched"] = len(enrichable)
+            self.stats["enrichment_successful"] = sum(
+                1 for r in enrichment_results if r.get("icp_fit_score") is not None
             )
 
             # Apply enrichment results to merged data
-            enrichable_domains = {c['domain']: c for c in enrichable}
+            enrichable_domains = {c["domain"]: c for c in enrichable}
 
             for company in self.merged_data:
-                if company['domain'] in enrichable_domains:
+                if company["domain"] in enrichable_domains:
                     # Find corresponding enrichment result
                     idx = next(
-                        i for i, c in enumerate(enrichable)
-                        if c['domain'] == company['domain']
+                        i for i, c in enumerate(enrichable) if c["domain"] == company["domain"]
                     )
                     enrichment = enrichment_results[idx]
 
                     # Apply if successful
-                    if enrichment.get('icp_fit_score') is not None:
-                        company.update({
-                            'icp_fit_score': enrichment['icp_fit_score'],
-                            'segment': enrichment['segment'],
-                            'primary_use_case': enrichment['primary_use_case'],
-                            'risk_flags': enrichment['risk_flags'],
-                            'personalized_pitch': enrichment['personalized_pitch'],
-                            'enrichment_status': 'success',
-                            'enrichment_error': None
-                        })
+                    if enrichment.get("icp_fit_score") is not None:
+                        company.update(
+                            {
+                                "icp_fit_score": enrichment["icp_fit_score"],
+                                "segment": enrichment["segment"],
+                                "primary_use_case": enrichment["primary_use_case"],
+                                "risk_flags": enrichment["risk_flags"],
+                                "personalized_pitch": enrichment["personalized_pitch"],
+                                "enrichment_status": "success",
+                                "enrichment_error": None,
+                            }
+                        )
                     else:
-                        company.update({
-                            'enrichment_status': 'failed',
-                            'enrichment_error': enrichment.get('error', 'Unknown error')
-                        })
+                        company.update(
+                            {
+                                "enrichment_status": "failed",
+                                "enrichment_error": enrichment.get("error", "Unknown error"),
+                            }
+                        )
 
-            success_rate = (self.stats['enrichment_successful'] / self.stats['companies_enriched'] * 100) if self.stats['companies_enriched'] else 0
+            success_rate = (
+                (self.stats["enrichment_successful"] / self.stats["companies_enriched"] * 100)
+                if self.stats["companies_enriched"]
+                else 0
+            )
 
             logger.info(
                 f"✓ Enriched {self.stats['companies_enriched']} companies - "
@@ -291,7 +302,7 @@ class Pipeline:
 
         except Exception as e:
             logger.error(f"Failed to enrich companies: {e}")
-            self.stats['errors'].append(f"LLM enrichment: {e}")
+            self.stats["errors"].append(f"LLM enrichment: {e}")
             return False
 
     def _persist_to_db(self) -> bool:
@@ -314,9 +325,9 @@ class Pipeline:
             try:
                 for company_data in self.merged_data:
                     # Check if company already exists (by domain)
-                    existing = db.query(Company).filter(
-                        Company.domain == company_data['domain']
-                    ).first()
+                    existing = (
+                        db.query(Company).filter(Company.domain == company_data["domain"]).first()
+                    )
 
                     if existing:
                         # Update existing company
@@ -329,12 +340,14 @@ class Pipeline:
                         db.add(company)
                         logger.debug(f"Created: {company_data['company_name']}")
 
-                    self.stats['companies_persisted'] += 1
+                    self.stats["companies_persisted"] += 1
 
                 # Commit all changes
                 db.commit()
 
-                logger.info(f"✓ Persisted {self.stats['companies_persisted']} companies to database")
+                logger.info(
+                    f"✓ Persisted {self.stats['companies_persisted']} companies to database"
+                )
 
                 return True
 
@@ -347,7 +360,7 @@ class Pipeline:
 
         except Exception as e:
             logger.error(f"Failed to persist to database: {e}")
-            self.stats['errors'].append(f"Database persistence: {e}")
+            self.stats["errors"].append(f"Database persistence: {e}")
             return False
 
     def _print_summary(self, start_time: datetime):
@@ -368,17 +381,17 @@ class Pipeline:
         logger.info(f"  • Enrichment successful: {self.stats['enrichment_successful']}")
         logger.info(f"  • Companies persisted: {self.stats['companies_persisted']}")
 
-        if self.stats['errors']:
+        if self.stats["errors"]:
             logger.info("")
             logger.info("Errors:")
-            for error in self.stats['errors']:
+            for error in self.stats["errors"]:
                 logger.info(f"  ✗ {error}")
 
         logger.info("")
 
         # Show sample enriched companies
         if self.merged_data:
-            enriched = [c for c in self.merged_data if c.get('enrichment_status') == 'success']
+            enriched = [c for c in self.merged_data if c.get("enrichment_status") == "success"]
             if enriched:
                 logger.info("Sample Enriched Companies:")
                 logger.info("-" * 70)
@@ -387,7 +400,7 @@ class Pipeline:
                     logger.info(f"  ICP Score: {company.get('icp_fit_score', 'N/A')}/100")
                     logger.info(f"  Segment: {company.get('segment', 'N/A')}")
                     logger.info(f"  Use Case: {company.get('primary_use_case', 'N/A')}")
-                    if company.get('risk_flags'):
+                    if company.get("risk_flags"):
                         logger.info(f"  Risk Flags: {', '.join(company['risk_flags'])}")
 
 
@@ -409,37 +422,21 @@ Examples:
 
   # Process only first 2 companies
   python -m src.pipeline data/companies.csv --max-companies 2
-        """
+        """,
     )
 
-    parser.add_argument(
-        'csv_path',
-        type=str,
-        help='Path to CSV file with company data'
-    )
+    parser.add_argument("csv_path", type=str, help="Path to CSV file with company data")
 
     parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Run pipeline without persisting to database'
+        "--dry-run", action="store_true", help="Run pipeline without persisting to database"
     )
 
-    parser.add_argument(
-        '--skip-scraping',
-        action='store_true',
-        help='Skip website scraping step'
-    )
+    parser.add_argument("--skip-scraping", action="store_true", help="Skip website scraping step")
+
+    parser.add_argument("--skip-enrichment", action="store_true", help="Skip LLM enrichment step")
 
     parser.add_argument(
-        '--skip-enrichment',
-        action='store_true',
-        help='Skip LLM enrichment step'
-    )
-
-    parser.add_argument(
-        '--max-companies',
-        type=int,
-        help='Maximum number of companies to process (for testing)'
+        "--max-companies", type=int, help="Maximum number of companies to process (for testing)"
     )
 
     args = parser.parse_args()
@@ -450,7 +447,7 @@ Examples:
         dry_run=args.dry_run,
         skip_scraping=args.skip_scraping,
         skip_enrichment=args.skip_enrichment,
-        max_companies=args.max_companies
+        max_companies=args.max_companies,
     )
 
     success = await pipeline.run()

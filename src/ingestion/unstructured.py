@@ -63,10 +63,7 @@ class WebsiteScraper:
                     ) as client:
                         logger.debug(f"Fetching {url} (attempt {attempt + 1})")
 
-                        response = await client.get(
-                            url,
-                            headers={'User-Agent': self.user_agent}
-                        )
+                        response = await client.get(url, headers={"User-Agent": self.user_agent})
 
                         response.raise_for_status()
 
@@ -76,11 +73,11 @@ class WebsiteScraper:
                         logger.info(f"✓ Successfully scraped {domain}")
 
                         return {
-                            'domain': domain,
-                            'text_snippet': text_snippet,
-                            'status': 'success',
-                            'error': None,
-                            'url': str(response.url),
+                            "domain": domain,
+                            "text_snippet": text_snippet,
+                            "status": "success",
+                            "error": None,
+                            "url": str(response.url),
                         }
 
                 except httpx.HTTPStatusError as e:
@@ -97,17 +94,17 @@ class WebsiteScraper:
 
             # Exponential backoff between retries
             if attempt < self.max_retries - 1:
-                await asyncio.sleep(2 ** attempt)
+                await asyncio.sleep(2**attempt)
 
         # All attempts failed
         logger.error(f"✗ Failed to scrape {domain} after {self.max_retries} attempts")
 
         return {
-            'domain': domain,
-            'text_snippet': None,
-            'status': 'failed',
-            'error': 'Failed to fetch after multiple attempts',
-            'url': None,
+            "domain": domain,
+            "text_snippet": None,
+            "status": "failed",
+            "error": "Failed to fetch after multiple attempts",
+            "url": None,
         }
 
     def _extract_text(self, html: str) -> str:
@@ -120,31 +117,31 @@ class WebsiteScraper:
         Returns:
             str: Extracted and cleaned text
         """
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
 
         # Remove unwanted elements
-        for element in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
+        for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
             element.decompose()
 
         # Get text from main content areas (prioritize main, article, section)
         main_content = (
-            soup.find('main') or
-            soup.find('article') or
-            soup.find('div', class_=['content', 'main-content']) or
-            soup.body or
-            soup
+            soup.find("main")
+            or soup.find("article")
+            or soup.find("div", class_=["content", "main-content"])
+            or soup.body
+            or soup
         )
 
         # Extract text
-        text = main_content.get_text(separator=' ', strip=True)
+        text = main_content.get_text(separator=" ", strip=True)
 
         # Clean up whitespace
-        text = ' '.join(text.split())
+        text = " ".join(text.split())
 
         # Truncate to maximum length
         max_length = settings.MAX_WEBSITE_TEXT_LENGTH
         if len(text) > max_length:
-            text = text[:max_length].rsplit(' ', 1)[0] + "..."
+            text = text[:max_length].rsplit(" ", 1)[0] + "..."
 
         return text
 
@@ -164,12 +161,10 @@ class WebsiteScraper:
         results = await asyncio.gather(*tasks)
 
         # Log summary
-        successful = sum(1 for r in results if r['status'] == 'success')
+        successful = sum(1 for r in results if r["status"] == "success")
         failed = len(results) - successful
 
-        logger.info(
-            f"Scraping complete: {successful} successful, {failed} failed"
-        )
+        logger.info(f"Scraping complete: {successful} successful, {failed} failed")
 
         return results
 
@@ -199,9 +194,9 @@ if __name__ == "__main__":
 
     # Test domains
     test_domains = [
-        'hubspot.com',
-        'asana.com',
-        'monday.com',
+        "hubspot.com",
+        "asana.com",
+        "monday.com",
     ]
 
     print(f"Testing scraper with {len(test_domains)} domains...\n")
@@ -213,8 +208,8 @@ if __name__ == "__main__":
             print(f"Domain: {result['domain']}")
             print(f"Status: {result['status']}")
 
-            if result['status'] == 'success':
-                snippet = result['text_snippet'][:200]
+            if result["status"] == "success":
+                snippet = result["text_snippet"][:200]
                 print(f"Text: {snippet}...")
             else:
                 print(f"Error: {result['error']}")

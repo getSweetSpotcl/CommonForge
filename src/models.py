@@ -61,12 +61,7 @@ class Company(Base):
 
     # Unstructured Data (from web scraping)
     website_text_snippet = Column(Text, nullable=True)
-    scraping_status = Column(
-        String(50),
-        nullable=False,
-        default="pending",
-        index=True
-    )
+    scraping_status = Column(String(50), nullable=False, default="pending", index=True)
     scraping_error = Column(Text, nullable=True)
 
     # Enriched Data (from LLM)
@@ -75,25 +70,12 @@ class Company(Base):
     primary_use_case = Column(Text, nullable=True)
     risk_flags = Column(JSON, nullable=True)
     personalized_pitch = Column(Text, nullable=True)
-    enrichment_status = Column(
-        String(50),
-        nullable=False,
-        default="pending",
-        index=True
-    )
+    enrichment_status = Column(String(50), nullable=False, default="pending", index=True)
     enrichment_error = Column(Text, nullable=True)
 
     # Metadata
-    created_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False
-    )
-    updated_at = Column(
-        DateTime(timezone=True),
-        onupdate=func.now(),
-        nullable=True
-    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
 
     def __repr__(self) -> str:
         """String representation of Company"""

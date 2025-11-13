@@ -58,6 +58,8 @@ class CompanyListResponse(BaseModel):
     """Response schema for list of companies"""
 
     total: int = Field(..., ge=0)
+    skip: int = Field(0, ge=0)
+    limit: int = Field(100, ge=1)
     companies: List[CompanyEnriched]
 
 
@@ -80,5 +82,6 @@ class HealthCheck(BaseModel):
     """Health check response schema"""
 
     status: str
-    service: str
-    database: Optional[bool] = None
+    database_connected: bool
+    total_companies: int = 0
+    enriched_companies: int = 0

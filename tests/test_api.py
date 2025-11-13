@@ -67,7 +67,7 @@ def sample_companies():
             primary_use_case="Sales automation",
             risk_flags=[],
             personalized_pitch="Perfect fit for enterprise sales teams",
-            enrichment_status="success"
+            enrichment_status="success",
         ),
         Company(
             company_name="Asana",
@@ -82,7 +82,7 @@ def sample_companies():
             primary_use_case="Team collaboration",
             risk_flags=["Budget concerns"],
             personalized_pitch="Great for growing teams",
-            enrichment_status="success"
+            enrichment_status="success",
         ),
         Company(
             company_name="Small Corp",
@@ -97,7 +97,7 @@ def sample_companies():
             primary_use_case="Client management",
             risk_flags=["Non-tech industry"],
             personalized_pitch="Consider for SMB segment",
-            enrichment_status="success"
+            enrichment_status="success",
         ),
         Company(
             company_name="Failed Corp",
@@ -108,8 +108,8 @@ def sample_companies():
             website_text_snippet=None,
             scraping_status="failed",
             enrichment_status="skipped",
-            enrichment_error="Skipped due to scraping failure"
-        )
+            enrichment_error="Skipped due to scraping failure",
+        ),
     ]
 
     for company in companies:

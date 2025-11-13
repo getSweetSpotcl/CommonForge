@@ -28,7 +28,7 @@ app = FastAPI(
     description="AI-Powered B2B Lead Scoring System API",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # CORS middleware
@@ -66,12 +66,7 @@ async def log_requests(request, call_next):
 @app.get("/", tags=["Health"])
 async def root():
     """Root endpoint - basic health check"""
-    return {
-        "service": "CommonForge API",
-        "version": "1.0.0",
-        "status": "healthy",
-        "docs": "/docs"
-    }
+    return {"service": "CommonForge API", "version": "1.0.0", "status": "healthy", "docs": "/docs"}
 
 
 # Detailed health check
@@ -91,9 +86,9 @@ async def health_check(db: Session = Depends(get_db)):
     # Get database stats
     try:
         total_companies = db.query(func.count(Company.id)).scalar()
-        enriched_companies = db.query(func.count(Company.id)).filter(
-            Company.enrichment_status == "success"
-        ).scalar()
+        enriched_companies = (
+            db.query(func.count(Company.id)).filter(Company.enrichment_status == "success").scalar()
+        )
     except Exception as e:
         logger.error(f"Failed to get database stats: {e}")
         total_companies = 0
@@ -107,7 +102,7 @@ async def health_check(db: Session = Depends(get_db)):
         status="healthy" if healthy else "unhealthy",
         database_connected=db_healthy,
         total_companies=total_companies,
-        enriched_companies=enriched_companies
+        enriched_companies=enriched_companies,
     )
 
 
@@ -117,13 +112,17 @@ async def list_companies(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum records to return"),
     country: Optional[str] = Query(None, description="Filter by country"),
-    segment: Optional[str] = Query(None, description="Filter by segment (SMB, Mid-Market, Enterprise)"),
+    segment: Optional[str] = Query(
+        None, description="Filter by segment (SMB, Mid-Market, Enterprise)"
+    ),
     min_score: Optional[int] = Query(None, ge=0, le=100, description="Minimum ICP fit score"),
     max_score: Optional[int] = Query(None, ge=0, le=100, description="Maximum ICP fit score"),
     enriched_only: bool = Query(False, description="Return only enriched companies"),
-    sort_by: str = Query("icp_fit_score", description="Sort field (icp_fit_score, company_name, employee_count)"),
+    sort_by: str = Query(
+        "icp_fit_score", description="Sort field (icp_fit_score, company_name, employee_count)"
+    ),
     sort_order: str = Query("desc", description="Sort order (asc, desc)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     List companies with optional filtering and pagination.
@@ -179,7 +178,7 @@ async def list_companies(
             total=total,
             skip=skip,
             limit=limit,
-            companies=[CompanyEnriched.model_validate(c) for c in companies]
+            companies=[CompanyEnriched.model_validate(c) for c in companies],
         )
 
     except Exception as e:
@@ -189,10 +188,7 @@ async def list_companies(
 
 # Get single company by ID
 @app.get("/companies/{company_id}", response_model=CompanyEnriched, tags=["Companies"])
-async def get_company(
-    company_id: int,
-    db: Session = Depends(get_db)
-):
+async def get_company(company_id: int, db: Session = Depends(get_db)):
     """
     Get a single company by ID.
 
@@ -212,10 +208,7 @@ async def get_company(
 
 # Get company by domain
 @app.get("/companies/by-domain/{domain}", response_model=CompanyEnriched, tags=["Companies"])
-async def get_company_by_domain(
-    domain: str,
-    db: Session = Depends(get_db)
-):
+async def get_company_by_domain(domain: str, db: Session = Depends(get_db)):
     """
     Get a company by domain name.
 
@@ -250,33 +243,40 @@ async def get_statistics(db: Session = Depends(get_db)):
     try:
         # Overall stats
         total = db.query(func.count(Company.id)).scalar()
-        enriched = db.query(func.count(Company.id)).filter(
-            Company.enrichment_status == "success"
-        ).scalar()
+        enriched = (
+            db.query(func.count(Company.id)).filter(Company.enrichment_status == "success").scalar()
+        )
 
         # Average score
-        avg_score = db.query(func.avg(Company.icp_fit_score)).filter(
-            Company.icp_fit_score.isnot(None)
-        ).scalar()
+        avg_score = (
+            db.query(func.avg(Company.icp_fit_score))
+            .filter(Company.icp_fit_score.isnot(None))
+            .scalar()
+        )
 
         # By segment
-        segments = db.query(
-            Company.segment,
-            func.count(Company.id).label('count')
-        ).filter(
-            Company.segment.isnot(None)
-        ).group_by(Company.segment).all()
+        segments = (
+            db.query(Company.segment, func.count(Company.id).label("count"))
+            .filter(Company.segment.isnot(None))
+            .group_by(Company.segment)
+            .all()
+        )
 
         # By country
-        countries = db.query(
-            Company.country,
-            func.count(Company.id).label('count')
-        ).group_by(Company.country).all()
+        countries = (
+            db.query(Company.country, func.count(Company.id).label("count"))
+            .group_by(Company.country)
+            .all()
+        )
 
         # Top companies by score
-        top_companies = db.query(Company).filter(
-            Company.icp_fit_score.isnot(None)
-        ).order_by(desc(Company.icp_fit_score)).limit(10).all()
+        top_companies = (
+            db.query(Company)
+            .filter(Company.icp_fit_score.isnot(None))
+            .order_by(desc(Company.icp_fit_score))
+            .limit(10)
+            .all()
+        )
 
         return {
             "total_companies": total,
@@ -291,10 +291,10 @@ async def get_statistics(db: Session = Depends(get_db)):
                     "company_name": c.company_name,
                     "domain": c.domain,
                     "icp_fit_score": c.icp_fit_score,
-                    "segment": c.segment
+                    "segment": c.segment,
                 }
                 for c in top_companies
-            ]
+            ],
         }
 
     except Exception as e:
@@ -308,11 +308,7 @@ async def global_exception_handler(request, exc):
     """Handle uncaught exceptions"""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Internal server error",
-            "error": str(exc)
-        }
+        status_code=500, content={"detail": "Internal server error", "error": str(exc)}
     )
 
 
@@ -323,7 +319,9 @@ async def startup_event():
     logger.info("=" * 60)
     logger.info("CommonForge API Starting")
     logger.info("=" * 60)
-    logger.info(f"Database: {settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else 'configured'}")
+    logger.info(
+        f"Database: {settings.DATABASE_URL.split('@')[-1] if '@' in settings.DATABASE_URL else 'configured'}"
+    )
     logger.info(f"Docs: /docs")
     logger.info(f"Health: /health")
     logger.info("=" * 60)
@@ -346,10 +344,4 @@ async def shutdown_event():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(
-        "src.api.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run("src.api.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")

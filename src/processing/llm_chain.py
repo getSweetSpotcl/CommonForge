@@ -7,8 +7,8 @@ Analyzes company data to generate ICP fit scores, segments, and personalized pit
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import PydanticOutputParser
+from langchain.prompts import ChatPromptTemplate
+from langchain.output_parsers import PydanticOutputParser
 import asyncio
 import logging
 
@@ -21,19 +21,15 @@ class CompanyEnrichment(BaseModel):
     """Structured output schema for company enrichment"""
 
     icp_fit_score: int = Field(
-        description="ICP fit score from 0-100. Higher means better fit for B2B SaaS.",
-        ge=0,
-        le=100
+        description="ICP fit score from 0-100. Higher means better fit for B2B SaaS.", ge=0, le=100
     )
 
     segment: str = Field(
         description="Company segment: SMB, Mid-Market, or Enterprise",
-        pattern="^(SMB|Mid-Market|Enterprise)$"
+        pattern="^(SMB|Mid-Market|Enterprise)$",
     )
 
-    primary_use_case: str = Field(
-        description="Main use case or pain point this company would have"
-    )
+    primary_use_case: str = Field(description="Main use case or pain point this company would have")
 
     risk_flags: List[str] = Field(
         description="List of risk factors or red flags (empty list if none)"
@@ -124,7 +120,7 @@ class LLMEnricher:
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-        rate_limit_delay: float = 1.0
+        rate_limit_delay: float = 1.0,
     ):
         """
         Initialize LLM enricher.
@@ -145,7 +141,7 @@ class LLMEnricher:
             model=self.model,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
-            openai_api_key=settings.OPENAI_API_KEY
+            openai_api_key=settings.OPENAI_API_KEY,
         )
 
         # Initialize parser
@@ -172,13 +168,14 @@ class LLMEnricher:
         try:
             # Prepare input
             input_data = {
-                'company_name': company['company_name'],
-                'domain': company['domain'],
-                'country': company['country'],
-                'employee_count': company['employee_count'],
-                'industry_raw': company['industry_raw'],
-                'website_text_snippet': company['website_text_snippet'] or "No website content available",
-                'format_instructions': self.parser.get_format_instructions()
+                "company_name": company["company_name"],
+                "domain": company["domain"],
+                "country": company["country"],
+                "employee_count": company["employee_count"],
+                "industry_raw": company["industry_raw"],
+                "website_text_snippet": company["website_text_snippet"]
+                or "No website content available",
+                "format_instructions": self.parser.get_format_instructions(),
             }
 
             # Create chain
@@ -199,9 +196,7 @@ class LLMEnricher:
             raise
 
     async def enrich_companies_batch(
-        self,
-        companies: List[Dict],
-        max_concurrent: int = 3
+        self, companies: List[Dict], max_concurrent: int = 3
     ) -> List[Dict]:
         """
         Enrich multiple companies with rate limiting.
@@ -223,7 +218,7 @@ class LLMEnricher:
 
         # Process in batches to respect rate limits
         for i in range(0, len(companies), max_concurrent):
-            batch = companies[i:i + max_concurrent]
+            batch = companies[i : i + max_concurrent]
             batch_num = (i // max_concurrent) + 1
             total_batches = (len(companies) + max_concurrent - 1) // max_concurrent
 
@@ -239,19 +234,18 @@ class LLMEnricher:
             for company, result in zip(batch, batch_results):
                 if isinstance(result, Exception):
                     logger.error(f"Error enriching {company['company_name']}: {result}")
-                    errors.append({
-                        'company': company['company_name'],
-                        'error': str(result)
-                    })
+                    errors.append({"company": company["company_name"], "error": str(result)})
                     # Add failed result
-                    results.append({
-                        'icp_fit_score': None,
-                        'segment': None,
-                        'primary_use_case': None,
-                        'risk_flags': [],
-                        'personalized_pitch': None,
-                        'error': str(result)
-                    })
+                    results.append(
+                        {
+                            "icp_fit_score": None,
+                            "segment": None,
+                            "primary_use_case": None,
+                            "risk_flags": [],
+                            "personalized_pitch": None,
+                            "error": str(result),
+                        }
+                    )
                 else:
                     results.append(result)
 
@@ -260,13 +254,10 @@ class LLMEnricher:
                 await asyncio.sleep(self.rate_limit_delay)
 
         # Log summary
-        successful = sum(1 for r in results if r.get('icp_fit_score') is not None)
+        successful = sum(1 for r in results if r.get("icp_fit_score") is not None)
         failed = len(results) - successful
 
-        logger.info(
-            f"Batch enrichment complete: "
-            f"{successful} successful, {failed} failed"
-        )
+        logger.info(f"Batch enrichment complete: " f"{successful} successful, {failed} failed")
 
         if errors:
             logger.warning(f"Errors encountered: {errors}")
@@ -319,7 +310,7 @@ if __name__ == "__main__":
         print("\n1. Loading and scraping...")
         csv_path = Path("data/companies.csv")
         structured = load_companies_from_csv(csv_path)
-        domains = [c['domain'] for c in structured]
+        domains = [c["domain"] for c in structured]
         scraped = await scrape_companies(domains)
 
         # Merge and prepare

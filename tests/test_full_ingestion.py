@@ -23,25 +23,25 @@ async def test_full_ingestion():
 
     # Step 2: Scrape websites
     print("\n2. Scraping company websites...")
-    domains = [c['domain'] for c in companies]
+    domains = [c["domain"] for c in companies]
     scraped_data = await scrape_companies(domains)
 
-    successful_scrapes = sum(1 for s in scraped_data if s['status'] == 'success')
+    successful_scrapes = sum(1 for s in scraped_data if s["status"] == "success")
     print(f"   ✓ Scraped {successful_scrapes}/{len(domains)} websites successfully")
 
     # Step 3: Merge data
     print("\n3. Merging structured and unstructured data...")
-    scraped_lookup = {s['domain']: s for s in scraped_data}
+    scraped_lookup = {s["domain"]: s for s in scraped_data}
 
     enriched_companies = []
     for company in companies:
-        scraped = scraped_lookup.get(company['domain'], {})
+        scraped = scraped_lookup.get(company["domain"], {})
 
         enriched = {
             **company,
-            'website_text_snippet': scraped.get('text_snippet'),
-            'scraping_status': scraped.get('status', 'failed'),
-            'scraping_error': scraped.get('error'),
+            "website_text_snippet": scraped.get("text_snippet"),
+            "scraping_status": scraped.get("status", "failed"),
+            "scraping_error": scraped.get("error"),
         }
         enriched_companies.append(enriched)
 
@@ -58,8 +58,8 @@ async def test_full_ingestion():
         print(f"Employees: {company['employee_count']:,}")
         print(f"Scraping: {company['scraping_status']}")
 
-        if company['website_text_snippet']:
-            snippet = company['website_text_snippet'][:150]
+        if company["website_text_snippet"]:
+            snippet = company["website_text_snippet"][:150]
             print(f"Text: {snippet}...")
 
     print("\n" + "=" * 60)
